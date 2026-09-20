@@ -1,0 +1,19 @@
+# Virtual environment
+myenv/
+
+# Scratch notes
+process.md
+
+# Python cache & build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary data
+*.csv
