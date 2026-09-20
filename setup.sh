@@ -153,10 +153,6 @@ CACHE_DIR="$HOME/.cache/huggingface/hub"
 PHI_DIR="$CACHE_DIR/models--${MODEL_PHI//\//--}"
 QWEN_DIR="$CACHE_DIR/models--${MODEL_QWEN//\//--}"
 
-PHI_CACHED=false
-QWEN_CACHED=false
-[ -d "$PHI_DIR" ] && PHI_CACHED=true
-[ -d "$QWEN_DIR" ] && QWEN_CACHED=true
 
 DOWNLOAD_FLAG="${1:-}"
 SELECTED_MODELS=()
@@ -262,10 +258,9 @@ try:
                 selected = []
                 break
         elif ch in ("\r", "\n"):
-            if cursor == 2:
+            selected = [m["id"] for m in models[:2] if m["checked"]]
+            if not selected and cursor == 2:
                 selected = ["1", "2"]
-            else:
-                selected = [m["id"] for m in models[:2] if m["checked"]]
             break
         elif ch == " ":
             if cursor == 2:
@@ -324,30 +319,18 @@ fi
 
 # Phi-4 Mini
 if [ "$DOWNLOAD_PHI" = true ]; then
-    if [ "$PHI_CACHED" = true ]; then
-        sz="$(du -shL "$PHI_DIR" 2>/dev/null | awk '{print $1}')"
-        echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 🧠 Phi-4 Mini (3.8B)     ${C_GREEN}[Already cached — $sz]${C_RESET}"
-    else
-        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 🧠 Phi-4 Mini (3.8B)..."
-        "$VENV_GENERATE" --model "$MODEL_PHI" --prompt "hello" --max-tokens 1
-        sz="$(du -shL "$PHI_DIR" 2>/dev/null | awk '{print $1}' || echo "2.0G")"
-        echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 🧠 Phi-4 Mini downloaded successfully (${sz})."
-        PHI_CACHED=true
-    fi
+    echo -e "${C_BLUE}│${C_RESET}  ⬇ Fetching 🧠 Phi-4 Mini (3.8B)..."
+    "$VENV_GENERATE" --model "$MODEL_PHI" --prompt "hello" --max-tokens 1
+    sz="$(du -shL "$PHI_DIR/snapshots" 2>/dev/null | awk '{print $1}' || du -shL "$PHI_DIR" 2>/dev/null | awk '{print $1}' || echo "2.0G")"
+    echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 🧠 Phi-4 Mini ready (${sz})."
 fi
 
 # Qwen2.5-Coder 3B
 if [ "$DOWNLOAD_QWEN" = true ]; then
-    if [ "$QWEN_CACHED" = true ]; then
-        sz="$(du -shL "$QWEN_DIR" 2>/dev/null | awk '{print $1}')"
-        echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 💻 Qwen2.5-Coder (3B)    ${C_GREEN}[Already cached — $sz]${C_RESET}"
-    else
-        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 💻 Qwen2.5-Coder (3B)..."
-        "$VENV_GENERATE" --model "$MODEL_QWEN" --prompt "hello" --max-tokens 1
-        sz="$(du -shL "$QWEN_DIR" 2>/dev/null | awk '{print $1}' || echo "1.6G")"
-        echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 💻 Qwen2.5-Coder downloaded successfully (${sz})."
-        QWEN_CACHED=true
-    fi
+    echo -e "${C_BLUE}│${C_RESET}  ⬇ Fetching 💻 Qwen2.5-Coder (3B)..."
+    "$VENV_GENERATE" --model "$MODEL_QWEN" --prompt "hello" --max-tokens 1
+    sz="$(du -shL "$QWEN_DIR/snapshots" 2>/dev/null | awk '{print $1}' || du -shL "$QWEN_DIR" 2>/dev/null | awk '{print $1}' || echo "1.6G")"
+    echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 💻 Qwen2.5-Coder ready (${sz})."
 fi
 
 echo -e "${C_BLUE}╰─────────────────────────────────────────────────────────────────────────────╯${C_RESET}"
