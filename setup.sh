@@ -42,6 +42,19 @@ VENV_PIP="$VENV_PATH/bin/pip"
 VENV_GENERATE="$VENV_PATH/bin/mlx_lm.generate"
 VENV_CHAT="$VENV_PATH/bin/mlx_lm.chat"
 
+# If called with --help, show usage and exit
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    echo "Usage: ./setup.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  (no args)           Interactive installation with arrow-key model picker"
+    echo "  --download-models   Install and download both Phi-4 Mini and Qwen2.5-Coder"
+    echo "  --skip-models       Install MLX framework and utilities only (no models)"
+    echo "  --aliases-only, -a  Source aliases in current session and exit"
+    echo "  --help, -h          Show this help message"
+    exit 0
+fi
+
 # If called with --aliases-only, define functions and exit
 if [ "${1:-}" = "--aliases-only" ] || [ "${1:-}" = "-a" ]; then
     mlxphi() {
@@ -151,7 +164,7 @@ elif [ "$DOWNLOAD_FLAG" = "--download-models" ]; then
 else
     # Launch SvelteKit-style arrow-key multi-select menu via Python
     PICKER_OUTPUT="$("$VENV_PYTHON" -c '
-import os, sys, tty, termios
+import os, sys, select, tty, termios
 
 models = [
     {
@@ -175,6 +188,7 @@ models = [
 # Check if /dev/tty is available for interactive navigation
 try:
     tty_fd = os.open("/dev/tty", os.O_RDWR)
+    old_attr = termios.tcgetattr(tty_fd)
 except Exception:
     # Non-interactive fallback: select both
     print("1 2")
@@ -190,23 +204,26 @@ C_RESET = "\033[0m"
 def draw(cursor, first=False):
     lines = []
     if not first:
-        lines.append(f"\033[{len(models) + 4}A")
+        lines.append(f"\r\033[{len(models) + 4}A")
     lines.append(f"\r\033[K{C_CYAN}┌── [3/4] SELECT MODELS TO INSTALL ───────────────────────────────────────────┐{C_RESET}\n")
     lines.append(f"\r\033[K{C_CYAN}│{C_RESET}\n")
     for i, m in enumerate(models):
         chk = f"[{C_GREEN}●{C_RESET}]" if m["checked"] else f"[{C_DIM}○{C_RESET}]"
         cur = f"{C_CYAN}◆{C_RESET} " if i == cursor else f"{C_DIM}◇{C_RESET} "
+        icon = m["icon"]
+        name = m["name"].ljust(22)
+        size = m["size"].rjust(6)
+        desc = m["desc"]
         lines.append(
-            f"\r\033[K{C_CYAN}│{C_RESET}  {cur}{chk} {m[\"icon\"]} {C_BOLD}{m[\"name\"]:\"<\"22}{C_RESET} {C_MAGENTA}{m[\"size\"]:>6}{C_RESET}  {C_DIM}• {m[\"desc\"]}{C_RESET}\n"
+            f"\r\033[K{C_CYAN}│{C_RESET}  {cur}{chk} {icon} {C_BOLD}{name}{C_RESET} {C_MAGENTA}{size}{C_RESET}  {C_DIM}• {desc}{C_RESET}\n"
         )
     lines.append(f"\r\033[K{C_CYAN}│{C_RESET}\n")
     lines.append(
-        f"\r\033[K{C_CYAN}└── Use ↑/↓ to navigate • Space to toggle • a to select all • Enter to confirm{C_RESET}\n"
+        f"\r\033[K{C_CYAN}└── Use ↑/↓ to navigate • Space/1/2 to toggle • a for all • Enter to confirm{C_RESET}\n"
     )
     os.write(tty_fd, "".join(lines).encode("utf-8"))
 
 cursor = 0
-old_attr = termios.tcgetattr(tty_fd)
 tty.setraw(tty_fd)
 draw(cursor, first=True)
 
@@ -214,19 +231,37 @@ selected = []
 try:
     while True:
         ch = os.read(tty_fd, 1).decode("latin1", errors="ignore")
-        if ch == "\x1b":
-            ch2 = os.read(tty_fd, 1).decode("latin1", errors="ignore")
-            if ch2 == "[":
-                ch3 = os.read(tty_fd, 1).decode("latin1", errors="ignore")
-                if ch3 == "A":
-                    cursor = (cursor - 1) % len(models)
-                elif ch3 == "B":
-                    cursor = (cursor + 1) % len(models)
+        if ch == "\x03":
+            os.write(tty_fd, b"\r\n")
+            sys.exit(130)
+        elif ch == "\x1b":
+            r, _, _ = select.select([tty_fd], [], [], 0.05)
+            if r:
+                ch2 = os.read(tty_fd, 1).decode("latin1", errors="ignore")
+                if ch2 == "[":
+                    r3, _, _ = select.select([tty_fd], [], [], 0.05)
+                    if r3:
+                        ch3 = os.read(tty_fd, 1).decode("latin1", errors="ignore")
+                        if ch3 == "A":
+                            cursor = (cursor - 1) % len(models)
+                        elif ch3 == "B":
+                            cursor = (cursor + 1) % len(models)
+            else:
+                selected = []
+                break
         elif ch in ("\r", "\n"):
             selected = [m["id"] for m in models if m["checked"]]
             break
         elif ch == " ":
             models[cursor]["checked"] = not models[cursor]["checked"]
+        elif ch == "1":
+            models[0]["checked"] = not models[0]["checked"]
+        elif ch == "2":
+            models[1]["checked"] = not models[1]["checked"]
+        elif ch in ("k", "K"):
+            cursor = (cursor - 1) % len(models)
+        elif ch in ("j", "J"):
+            cursor = (cursor + 1) % len(models)
         elif ch in ("a", "A"):
             all_chk = all(m["checked"] for m in models)
             for m in models:
@@ -236,11 +271,12 @@ try:
             break
         draw(cursor)
 finally:
+    os.write(tty_fd, b"\r\n")
     termios.tcsetattr(tty_fd, termios.TCSADRAIN, old_attr)
     os.close(tty_fd)
 
 print(" ".join(selected))
-' 2>/dev/null || echo "1 2")"
+' || echo "1 2")"
 
     IFS=' ' read -r -a SELECTED_MODELS <<< "$PICKER_OUTPUT"
 fi
@@ -316,8 +352,8 @@ export PATH="\$MLX_AI_DIR/myenv/bin:\$PATH"
 
 ALIAS_HEADER
 
-    # Write Phi aliases only if selected or cached
-    if [ "$DOWNLOAD_PHI" = true ] || [ "$PHI_CACHED" = true ]; then
+    # Write Phi aliases only if selected by user
+    if [ "$DOWNLOAD_PHI" = true ]; then
         cat >> "$ZSHRC" << PHI_BLOCK
 # Chat with Phi-4 Mini (3.8B)
 mlxphi() {
@@ -335,10 +371,12 @@ PHI_BLOCK
         # Also define in current session immediately
         eval "mlxphi() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.chat --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 \"\$@\"; }"
         eval "mlxphig() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.generate --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 --prompt \"\$*\"; }"
+    else
+        unset -f mlxphi mlxphig 2>/dev/null || true
     fi
 
-    # Write Qwen aliases only if selected or cached
-    if [ "$DOWNLOAD_QWEN" = true ] || [ "$QWEN_CACHED" = true ]; then
+    # Write Qwen aliases only if selected by user
+    if [ "$DOWNLOAD_QWEN" = true ]; then
         cat >> "$ZSHRC" << QWEN_BLOCK
 # Chat with Qwen2.5-Coder (3B)
 mlxqwen() {
@@ -356,6 +394,8 @@ QWEN_BLOCK
         # Also define in current session immediately
         eval "mlxqwen() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.chat --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 8192 \"\$@\"; }"
         eval "mlxqweng() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.generate --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 4096 --prompt \"\$*\"; }"
+    else
+        unset -f mlxqwen mlxqweng 2>/dev/null || true
     fi
 
     # Core utilities: mlxmodels, mlxrun, mlxadd
@@ -469,11 +509,11 @@ UTIL_BLOCK
     eval "mlxmodels() { source \"$REPO_DIR/myenv/bin/activate\"; mlxmodels; }" 2>/dev/null || true
 
     echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} Standalone commands dynamically injected into ${C_WHITE}~/.zshrc${C_RESET}:"
-    if [ "$DOWNLOAD_PHI" = true ] || [ "$PHI_CACHED" = true ]; then
+    if [ "$DOWNLOAD_PHI" = true ]; then
         echo -e "${C_BLUE}│${C_RESET}    • ${C_BOLD}${C_CYAN}mlxphi${C_RESET}   (Phi-4 Mini Chat)"
         echo -e "${C_BLUE}│${C_RESET}    • ${C_BOLD}${C_CYAN}mlxphig${C_RESET}  (Phi-4 Mini Generate)"
     fi
-    if [ "$DOWNLOAD_QWEN" = true ] || [ "$QWEN_CACHED" = true ]; then
+    if [ "$DOWNLOAD_QWEN" = true ]; then
         echo -e "${C_BLUE}│${C_RESET}    • ${C_BOLD}${C_CYAN}mlxqwen${C_RESET}  (Qwen2.5-Coder Chat)"
         echo -e "${C_BLUE}│${C_RESET}    • ${C_BOLD}${C_CYAN}mlxqweng${C_RESET} (Qwen2.5-Coder Generate)"
     fi
@@ -492,13 +532,16 @@ echo -e "${C_GREEN}║${C_RESET}  ${C_BOLD}${C_GREEN}🎉 SETUP COMPLETE! YOUR C
 echo -e "${C_GREEN}╚═════════════════════════════════════════════════════════════════════════════╝${C_RESET}"
 echo ""
 echo -e "  ${C_BOLD}${C_WHITE}COMMANDS READY IN YOUR SHELL:${C_RESET}"
-if [ "$DOWNLOAD_PHI" = true ] || [ "$PHI_CACHED" = true ]; then
+if [ "$DOWNLOAD_PHI" = true ]; then
     echo -e "    ${C_BOLD}${C_CYAN}mlxphi${C_RESET}                  ${C_WHITE}Interactive chat with Phi-4 Mini (3.8B)${C_RESET}"
     echo -e "    ${C_BOLD}${C_CYAN}mlxphig \"prompt\"${C_RESET}        ${C_WHITE}One-shot reasoning prompt with Phi-4 Mini${C_RESET}"
 fi
-if [ "$DOWNLOAD_QWEN" = true ] || [ "$QWEN_CACHED" = true ]; then
+if [ "$DOWNLOAD_QWEN" = true ]; then
     echo -e "    ${C_BOLD}${C_CYAN}mlxqwen${C_RESET}                 ${C_WHITE}Interactive chat with Qwen2.5-Coder (3B)${C_RESET}"
     echo -e "    ${C_BOLD}${C_CYAN}mlxqweng \"prompt\"${C_RESET}       ${C_WHITE}One-shot code generation with Qwen2.5-Coder${C_RESET}"
+fi
+if [ "$DOWNLOAD_PHI" = false ] && [ "$DOWNLOAD_QWEN" = false ]; then
+    echo -e "    ${C_DIM}(No model shortcuts configured. Run mlxadd to add one anytime)${C_RESET}"
 fi
 echo -e "    ${C_BOLD}${C_CYAN}mlxmodels${C_RESET}               ${C_WHITE}View cached models, real disk sizes & shortcuts${C_RESET}"
 echo -e "    ${C_BOLD}${C_CYAN}mlxadd <model-id>${C_RESET}       ${C_WHITE}Download any HF model & auto-generate its shortcuts${C_RESET}"
@@ -508,7 +551,7 @@ echo -e "  ${C_DIM}Built by @buildwithfiroz • https://github.com/buildwithfiro
 echo ""
 
 # Auto-reload shell for user's interactive terminal session
-if [ -t 0 ] && [ -t 1 ] && [ -z "${ANTIGRAVITY_AGENT:-}" ] && [ -z "${CI:-}" ]; then
+if [ -t 0 ] && [ -t 1 ] && [ -z "${ANTIGRAVITY_CSRF_TOKEN:-}" ] && [ -z "${ANTIGRAVITY_AGENT:-}" ] && [ -z "${CI:-}" ]; then
     echo -e "  ${C_GREEN}⚡ Auto-activating your shell... All commands are ready right now!${C_RESET}"
     sleep 0.5
     exec zsh -l

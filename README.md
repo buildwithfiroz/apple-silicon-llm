@@ -43,7 +43,11 @@ cd apple-silicon-llm
 
 # 2. Run the one-click setup
 chmod +x setup.sh
-./setup.sh
+./setup.sh                  # Interactive setup with arrow-key model selector
+
+# Optional flags:
+# ./setup.sh --download-models  # Unattended: download both models
+# ./setup.sh --skip-models      # Lightweight: MLX framework & tools only
 ```
 
 During setup, you will be prompted with an interactive menu to choose which models to download:
