@@ -740,6 +740,14 @@ field... Please set the `factor` field of `rope_parameters` with this ratio inst
 
 **This is a harmless deprecation notice** from Hugging Face `transformers` (v5.x). Microsoft's Phi-3/Phi-4 configs use an older RoPE schema. It does not affect inference quality, accuracy, or performance. The model loads and runs correctly.
 
+### `HF_TOKEN` Unauthenticated Request Notice
+
+During download, you may see:
+```text
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+```
+**This is completely normal and safe to ignore.** Hugging Face allows public open models (like Phi-4 Mini and Qwen2.5-Coder) to be downloaded 100% anonymously without an account or API token. A `HF_TOKEN` is only necessary if you are downloading gated models (e.g., Llama 3) that require accepting a license agreement on Hugging Face.
+
 ### Metal Shader Compilation (First Launch Only)
 
 On the very first run, Apple's Metal compiler compiles GPU shaders for your specific chip. This adds \~2–5 seconds. Subsequent launches reuse the compiled shader cache.
