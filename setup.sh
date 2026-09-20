@@ -149,10 +149,15 @@ CACHE_DIR="$HOME/.cache/huggingface/hub"
 PHI_DIR="$CACHE_DIR/models--mlx-community--Phi-4-mini-instruct-4bit"
 QWEN_DIR="$CACHE_DIR/models--mlx-community--Qwen2.5-Coder-3B-Instruct-4bit"
 
+is_cached() {
+    local dir="$1"
+    [ -d "$dir" ] && ls "$dir"/snapshots/*/model*.safetensors >/dev/null 2>&1
+}
+
 PHI_CACHED=false
 QWEN_CACHED=false
-[ -d "$PHI_DIR" ] && PHI_CACHED=true
-[ -d "$QWEN_DIR" ] && QWEN_CACHED=true
+is_cached "$PHI_DIR" && PHI_CACHED=true
+is_cached "$QWEN_DIR" && QWEN_CACHED=true
 
 DOWNLOAD_FLAG="${1:-}"
 SELECTED_MODELS=()
@@ -181,6 +186,14 @@ models = [
         "size": "1.6 GB",
         "desc": "Dedicated Fast Code Generation",
         "icon": "💻",
+        "checked": True,
+    },
+    {
+        "id": "all",
+        "name": "Install Both (All)",
+        "size": "3.6 GB",
+        "desc": "Complete Suite: Chat + Coding",
+        "icon": "📦",
         "checked": True,
     },
 ]
@@ -219,7 +232,7 @@ def draw(cursor, first=False):
         )
     lines.append(f"\r\033[K{C_CYAN}│{C_RESET}\n")
     lines.append(
-        f"\r\033[K{C_CYAN}└── Use ↑/↓ to navigate • Space/1/2 to toggle • a for all • Enter to confirm{C_RESET}\n"
+        f"\r\033[K{C_CYAN}└── Use ↑/↓ to navigate • Space to toggle • Enter to confirm • a for all{C_RESET}\n"
     )
     os.write(tty_fd, "".join(lines).encode("utf-8"))
 
@@ -250,22 +263,37 @@ try:
                 selected = []
                 break
         elif ch in ("\r", "\n"):
-            selected = [m["id"] for m in models if m["checked"]]
+            if cursor == 2:
+                selected = ["1", "2"]
+            else:
+                selected = [m["id"] for m in models[:2] if m["checked"]]
             break
         elif ch == " ":
-            models[cursor]["checked"] = not models[cursor]["checked"]
+            if cursor == 2:
+                new_state = not models[2]["checked"]
+                for m in models:
+                    m["checked"] = new_state
+            else:
+                models[cursor]["checked"] = not models[cursor]["checked"]
+                models[2]["checked"] = models[0]["checked"] and models[1]["checked"]
         elif ch == "1":
             models[0]["checked"] = not models[0]["checked"]
+            models[2]["checked"] = models[0]["checked"] and models[1]["checked"]
         elif ch == "2":
             models[1]["checked"] = not models[1]["checked"]
+            models[2]["checked"] = models[0]["checked"] and models[1]["checked"]
+        elif ch == "3":
+            new_state = not models[2]["checked"]
+            for m in models:
+                m["checked"] = new_state
         elif ch in ("k", "K"):
             cursor = (cursor - 1) % len(models)
         elif ch in ("j", "J"):
             cursor = (cursor + 1) % len(models)
         elif ch in ("a", "A"):
-            all_chk = all(m["checked"] for m in models)
+            new_state = not models[2]["checked"]
             for m in models:
-                m["checked"] = not all_chk
+                m["checked"] = new_state
         elif ch in ("s", "S", "q", "Q"):
             selected = []
             break
@@ -301,8 +329,12 @@ if [ "$DOWNLOAD_PHI" = true ]; then
         sz="$(du -shL "$PHI_DIR/snapshots" 2>/dev/null | awk '{print $1}')"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 🧠 Phi-4 Mini (3.8B)     ${C_GREEN}[Already cached — $sz]${C_RESET}"
     else
-        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 🧠 Phi-4 Mini (3.8B)..."
-        "$VENV_GENERATE" --model "mlx-community/Phi-4-mini-instruct-4bit" --prompt "hello" --max-tokens 1 2>&1 | grep -v "^\[transformers\]" || true
+        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 🧠 Phi-4 Mini (3.8B) [~2.0 GB]..."
+        echo -e "${C_BLUE}│${C_RESET}  ${C_DIM}Live download progress below:${C_RESET}"
+        "$VENV_PYTHON" -c "
+from huggingface_hub import snapshot_download
+snapshot_download('mlx-community/Phi-4-mini-instruct-4bit')
+"
         sz="$(du -shL "$PHI_DIR/snapshots" 2>/dev/null | awk '{print $1}' || echo "2.0G")"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 🧠 Phi-4 Mini downloaded successfully (${sz})."
         PHI_CACHED=true
@@ -315,8 +347,12 @@ if [ "$DOWNLOAD_QWEN" = true ]; then
         sz="$(du -shL "$QWEN_DIR/snapshots" 2>/dev/null | awk '{print $1}')"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 💻 Qwen2.5-Coder (3B)    ${C_GREEN}[Already cached — $sz]${C_RESET}"
     else
-        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 💻 Qwen2.5-Coder (3B)..."
-        "$VENV_GENERATE" --model "mlx-community/Qwen2.5-Coder-3B-Instruct-4bit" --prompt "hello" --max-tokens 1 2>&1 | grep -v "^\[transformers\]" || true
+        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 💻 Qwen2.5-Coder (3B) [~1.6 GB]..."
+        echo -e "${C_BLUE}│${C_RESET}  ${C_DIM}Live download progress below:${C_RESET}"
+        "$VENV_PYTHON" -c "
+from huggingface_hub import snapshot_download
+snapshot_download('mlx-community/Qwen2.5-Coder-3B-Instruct-4bit')
+"
         sz="$(du -shL "$QWEN_DIR/snapshots" 2>/dev/null | awk '{print $1}' || echo "1.6G")"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 💻 Qwen2.5-Coder downloaded successfully (${sz})."
         QWEN_CACHED=true
@@ -473,7 +509,11 @@ mlxadd() {
     fi
 
     echo "⬇ Downloading \$model_id..."
-    mlx_lm.generate --model "\$model_id" --prompt "hello" --max-tokens 1 2>&1 | grep -v "^\[transformers\]" || true
+    "$REPO_DIR/myenv/bin/python" -c "
+import sys
+from huggingface_hub import snapshot_download
+snapshot_download(repo_id=sys.argv[1])
+" "\$model_id"
 
     local raw_name="\$(echo "\$model_id" | sed 's/^mlx-community\///' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-6)"
     local chat_cmd="mlx\${raw_name}"
