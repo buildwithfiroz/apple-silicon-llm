@@ -849,10 +849,10 @@ Contributions, bug reports, and hardware benchmark submissions from any Apple Si
 
 ### License
 
-> **Note:** A license file has not yet been selected for this repository. An open-source license such as **MIT** or **Apache-2.0** should be applied before public distribution.
+This project is licensed under the [MIT License](LICENSE) — see the LICENSE file for details.
 
 ---
 
-Built with care by [[buildwithfiroz](mention:buildwithfiroz)]()​
+Built with care by **[@buildwithfiroz](https://github.com/buildwithfiroz)**.
 
-  Making local AI practical on Apple Silicon.
+Making local AI fast, private, and practical on Apple Silicon.
