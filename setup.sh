@@ -42,6 +42,10 @@ VENV_PIP="$VENV_PATH/bin/pip"
 VENV_GENERATE="$VENV_PATH/bin/mlx_lm.generate"
 VENV_CHAT="$VENV_PATH/bin/mlx_lm.chat"
 
+# Central model definitions (100% robust & configurable)
+MODEL_PHI="mlx-community/Phi-4-mini-instruct-4bit"
+MODEL_QWEN="mlx-community/Qwen2.5-Coder-3B-Instruct-4bit"
+
 # If called with --help, show usage and exit
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "Usage: ./setup.sh [OPTIONS]"
@@ -59,19 +63,19 @@ fi
 if [ "${1:-}" = "--aliases-only" ] || [ "${1:-}" = "-a" ]; then
     mlxphi() {
         source "$REPO_DIR/myenv/bin/activate"
-        mlx_lm.chat --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 "$@"
+        mlx_lm.chat --model "$MODEL_PHI" --max-tokens 8192 "$@"
     }
     mlxphig() {
         source "$REPO_DIR/myenv/bin/activate"
-        mlx_lm.generate --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 --prompt "$*"
+        mlx_lm.generate --model "$MODEL_PHI" --max-tokens 8192 --prompt "$*"
     }
     mlxqwen() {
         source "$REPO_DIR/myenv/bin/activate"
-        mlx_lm.chat --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 8192 "$@"
+        mlx_lm.chat --model "$MODEL_QWEN" --max-tokens 8192 "$@"
     }
     mlxqweng() {
         source "$REPO_DIR/myenv/bin/activate"
-        mlx_lm.generate --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 4096 --prompt "$*"
+        mlx_lm.generate --model "$MODEL_QWEN" --max-tokens 4096 --prompt "$*"
     }
     return 0 2>/dev/null || exit 0
 fi
@@ -146,18 +150,13 @@ echo ""
 # 3. Model Downloads (SvelteKit-Style Interactive Arrow-Key Selector)
 # -----------------------------------------------------------------------------
 CACHE_DIR="$HOME/.cache/huggingface/hub"
-PHI_DIR="$CACHE_DIR/models--mlx-community--Phi-4-mini-instruct-4bit"
-QWEN_DIR="$CACHE_DIR/models--mlx-community--Qwen2.5-Coder-3B-Instruct-4bit"
-
-is_cached() {
-    local dir="$1"
-    [ -d "$dir" ] && ls "$dir"/snapshots/*/model*.safetensors >/dev/null 2>&1
-}
+PHI_DIR="$CACHE_DIR/models--${MODEL_PHI//\//--}"
+QWEN_DIR="$CACHE_DIR/models--${MODEL_QWEN//\//--}"
 
 PHI_CACHED=false
 QWEN_CACHED=false
-is_cached "$PHI_DIR" && PHI_CACHED=true
-is_cached "$QWEN_DIR" && QWEN_CACHED=true
+[ -d "$PHI_DIR" ] && PHI_CACHED=true
+[ -d "$QWEN_DIR" ] && QWEN_CACHED=true
 
 DOWNLOAD_FLAG="${1:-}"
 SELECTED_MODELS=()
@@ -326,16 +325,12 @@ fi
 # Phi-4 Mini
 if [ "$DOWNLOAD_PHI" = true ]; then
     if [ "$PHI_CACHED" = true ]; then
-        sz="$(du -shL "$PHI_DIR/snapshots" 2>/dev/null | awk '{print $1}')"
+        sz="$(du -shL "$PHI_DIR" 2>/dev/null | awk '{print $1}')"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 🧠 Phi-4 Mini (3.8B)     ${C_GREEN}[Already cached — $sz]${C_RESET}"
     else
-        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 🧠 Phi-4 Mini (3.8B) [~2.0 GB]..."
-        echo -e "${C_BLUE}│${C_RESET}  ${C_DIM}Live download progress below:${C_RESET}"
-        "$VENV_PYTHON" -c "
-from huggingface_hub import snapshot_download
-snapshot_download('mlx-community/Phi-4-mini-instruct-4bit')
-"
-        sz="$(du -shL "$PHI_DIR/snapshots" 2>/dev/null | awk '{print $1}' || echo "2.0G")"
+        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 🧠 Phi-4 Mini (3.8B)..."
+        "$VENV_GENERATE" --model "$MODEL_PHI" --prompt "hello" --max-tokens 1
+        sz="$(du -shL "$PHI_DIR" 2>/dev/null | awk '{print $1}' || echo "2.0G")"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 🧠 Phi-4 Mini downloaded successfully (${sz})."
         PHI_CACHED=true
     fi
@@ -344,16 +339,12 @@ fi
 # Qwen2.5-Coder 3B
 if [ "$DOWNLOAD_QWEN" = true ]; then
     if [ "$QWEN_CACHED" = true ]; then
-        sz="$(du -shL "$QWEN_DIR/snapshots" 2>/dev/null | awk '{print $1}')"
+        sz="$(du -shL "$QWEN_DIR" 2>/dev/null | awk '{print $1}')"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 💻 Qwen2.5-Coder (3B)    ${C_GREEN}[Already cached — $sz]${C_RESET}"
     else
-        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 💻 Qwen2.5-Coder (3B) [~1.6 GB]..."
-        echo -e "${C_BLUE}│${C_RESET}  ${C_DIM}Live download progress below:${C_RESET}"
-        "$VENV_PYTHON" -c "
-from huggingface_hub import snapshot_download
-snapshot_download('mlx-community/Qwen2.5-Coder-3B-Instruct-4bit')
-"
-        sz="$(du -shL "$QWEN_DIR/snapshots" 2>/dev/null | awk '{print $1}' || echo "1.6G")"
+        echo -e "${C_BLUE}│${C_RESET}  ⬇ Downloading 💻 Qwen2.5-Coder (3B)..."
+        "$VENV_GENERATE" --model "$MODEL_QWEN" --prompt "hello" --max-tokens 1
+        sz="$(du -shL "$QWEN_DIR" 2>/dev/null | awk '{print $1}' || echo "1.6G")"
         echo -e "${C_BLUE}│${C_RESET}  ${C_GREEN}✔${C_RESET} 💻 Qwen2.5-Coder downloaded successfully (${sz})."
         QWEN_CACHED=true
     fi
@@ -394,19 +385,19 @@ ALIAS_HEADER
 # Chat with Phi-4 Mini (3.8B)
 mlxphi() {
     source "$REPO_DIR/myenv/bin/activate"
-    mlx_lm.chat --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 "\$@"
+    mlx_lm.chat --model $MODEL_PHI --max-tokens 8192 "\$@"
 }
 
 # One-shot prompt with Phi-4 Mini (3.8B)
 mlxphig() {
     source "$REPO_DIR/myenv/bin/activate"
-    mlx_lm.generate --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 --prompt "\$*"
+    mlx_lm.generate --model $MODEL_PHI --max-tokens 8192 --prompt "\$*"
 }
 
 PHI_BLOCK
         # Also define in current session immediately
-        eval "mlxphi() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.chat --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 \"\$@\"; }"
-        eval "mlxphig() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.generate --model mlx-community/Phi-4-mini-instruct-4bit --max-tokens 8192 --prompt \"\$*\"; }"
+        eval "mlxphi() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.chat --model $MODEL_PHI --max-tokens 8192 \"\$@\"; }"
+        eval "mlxphig() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.generate --model $MODEL_PHI --max-tokens 8192 --prompt \"\$*\"; }"
     else
         unset -f mlxphi mlxphig 2>/dev/null || true
     fi
@@ -417,19 +408,19 @@ PHI_BLOCK
 # Chat with Qwen2.5-Coder (3B)
 mlxqwen() {
     source "$REPO_DIR/myenv/bin/activate"
-    mlx_lm.chat --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 8192 "\$@"
+    mlx_lm.chat --model $MODEL_QWEN --max-tokens 8192 "\$@"
 }
 
 # One-shot code generation with Qwen2.5-Coder (3B)
 mlxqweng() {
     source "$REPO_DIR/myenv/bin/activate"
-    mlx_lm.generate --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 4096 --prompt "\$*"
+    mlx_lm.generate --model $MODEL_QWEN --max-tokens 4096 --prompt "\$*"
 }
 
 QWEN_BLOCK
         # Also define in current session immediately
-        eval "mlxqwen() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.chat --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 8192 \"\$@\"; }"
-        eval "mlxqweng() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.generate --model mlx-community/Qwen2.5-Coder-3B-Instruct-4bit --max-tokens 4096 --prompt \"\$*\"; }"
+        eval "mlxqwen() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.chat --model $MODEL_QWEN --max-tokens 8192 \"\$@\"; }"
+        eval "mlxqweng() { source \"$REPO_DIR/myenv/bin/activate\"; mlx_lm.generate --model $MODEL_QWEN --max-tokens 4096 --prompt \"\$*\"; }"
     else
         unset -f mlxqwen mlxqweng 2>/dev/null || true
     fi
@@ -509,11 +500,7 @@ mlxadd() {
     fi
 
     echo "⬇ Downloading \$model_id..."
-    "$REPO_DIR/myenv/bin/python" -c "
-import sys
-from huggingface_hub import snapshot_download
-snapshot_download(repo_id=sys.argv[1])
-" "\$model_id"
+    mlx_lm.generate --model "\$model_id" --prompt "hello" --max-tokens 1
 
     local raw_name="\$(echo "\$model_id" | sed 's/^mlx-community\///' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-6)"
     local chat_cmd="mlx\${raw_name}"
